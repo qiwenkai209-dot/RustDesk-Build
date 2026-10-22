@@ -1,0 +1,63 @@
+name: Build Official Injected MSI Package
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-msi:
+    runs-on: windows-2022
+    steps:
+      - name: 检出仓库
+        uses: actions/checkout@v4
+
+      - name: 生成内置专属配置的官方 MSI 安装包
+        shell: pwsh
+        run: |
+          $hostServer = "rustdesk.bjthua.cn"
+          $key = "qCYNyPS97UcaoJVwwo2wRAC6AOvm3umFYam82p5hBIQ="
+          $password = "Qq123456"
+          
+          # 下载官方标准 64 位 MSI 安装包
+          $msiUrl = "https://github.com/rustdesk/rustdesk/releases/download/1.3.1/rustdesk-1.3.1-x86_64.msi"
+          $rawMsi = "rustdesk-raw.msi"
+          Invoke-WebRequest -Uri $msiUrl -OutFile $rawMsi
+          
+          # 制作带一键静默自动注入服务器配置的专属 MSI 分发包
+          mkdir -p QustDesk_MSI_Release
+          Copy-Item $rawMsi "QustDesk_MSI_Release/RustDesk-Setup.msi"
+          
+          # 创建一键免拦截安装脚本 (由 msiexec 系统合法进程自动静默安装并下发服务器与Key)
+          $installScript = @"
+          @echo off
+          title 正在通过 Windows Installer 安全安装 RustDesk...
+          cd /d "%~dp0"
+          
+          echo 正在安装客户端...
+          msiexec /i "RustDesk-Setup.msi" /qn /norestart
+          
+          echo 正在永久注入服务器配置与安全通信Key...
+          reg add "HKLM\SOFTWARE\RustDesk\RustDesk" /v "custom-rendezvous-server" /t REG_SZ /d "$hostServer" /f >nul 2>&1
+          reg add "HKLM\SOFTWARE\RustDesk\RustDesk" /v "key" /t REG_SZ /d "$key" /f >nul 2>&1
+          reg add "HKCU\Software\RustDesk\RustDesk" /v "custom-rendezvous-server" /t REG_SZ /d "$hostServer" /f >nul 2>&1
+          reg add "HKCU\Software\RustDesk\RustDesk" /v "key" /t REG_SZ /d "$key" /f >nul 2>&1
+
+          echo 正在启动已就绪客户端...
+          start "" "C:\Program Files\RustDesk\rustdesk.exe"
+          exit
+          "@
+          [System.IO.File]::WriteAllText("QustDesk_MSI_Release/双击免拦截安装并启动.bat", $installScript, [System.Text.Encoding]::Default)
+          
+          # 同时也提供一份带配置名称的标准 MSI (部分企业策略直接识别该文件名自动配置)
+          $paramMsiName = "RustDesk-host=$hostServer,key=$key,password=$password.msi"
+          Copy-Item $rawMsi "QustDesk_MSI_Release/$paramMsiName"
+          
+          Compress-Archive -Path "QustDesk_MSI_Release/*" -DestinationPath "RustDesk-Official-MSI.zip"
+          Write-Host "🎉 官方原生 MSI 专属配置安装包已制作完成！"
+
+      - name: 上传 MSI 安装包产物
+        uses: actions/upload-artifact@v4
+        with:
+          name: RustDesk-Official-MSI-Installer
+          path: |
+            RustDesk-Official-MSI.zip
+            QustDesk_MSI_Release/*.msi
