@@ -2,6 +2,8 @@ name: Build Minimal 5-Elements QustDesk
 
 on:
   workflow_dispatch:
+  push:
+    branches: [ main ]
 
 jobs:
   build:
