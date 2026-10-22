@@ -50,20 +50,19 @@ class _MinimalHomePageState extends State<MinimalHomePage> {
         final lines = file.readAsLinesSync();
         for (var line in lines) {
           final trimmed = line.trim();
-          if (trimmed.startsWith('permanent-password')) {
-            final match = RegExp(r"permanent-password\s*=\s*['\"](.*?)['\"]").firstMatch(trimmed);
-            if (match != null && match.group(1) != null && match.group(1)!.isNotEmpty) {
-              myPassword = match.group(1)!;
+          if (trimmed.contains('=')) {
+            final idx = trimmed.indexOf('=');
+            final k = trimmed.substring(0, idx).trim();
+            var v = trimmed.substring(idx + 1).trim();
+            if ((v.startsWith("'") && v.endsWith("'")) || (v.startsWith('"') && v.endsWith('"'))) {
+              v = v.substring(1, v.length - 1);
             }
-          } else if (trimmed.startsWith('custom-rendezvous-server') || (trimmed.startsWith('rendezvous_server') && hostServer == "rustdesk.bjthua.cn")) {
-            final match = RegExp(r"=\s*['\"](.*?)['\"]").firstMatch(trimmed);
-            if (match != null && match.group(1) != null && match.group(1)!.isNotEmpty) {
-              hostServer = match.group(1)!.replaceAll(':21116', '');
-            }
-          } else if (trimmed.startsWith('key')) {
-            final match = RegExp(r"key\s*=\s*['\"](.*?)['\"]").firstMatch(trimmed);
-            if (match != null && match.group(1) != null && match.group(1)!.isNotEmpty) {
-              serverKey = match.group(1)!;
+            if (k == 'permanent-password' && v.isNotEmpty) {
+              myPassword = v;
+            } else if ((k == 'custom-rendezvous-server' || k == 'rendezvous_server') && v.isNotEmpty) {
+              hostServer = v.replaceAll(':21116', '');
+            } else if (k == 'key' && v.isNotEmpty) {
+              serverKey = v;
             }
           }
         }
