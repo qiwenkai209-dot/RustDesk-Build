@@ -3,7 +3,9 @@ name: Build Single Standalone EXE
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    paths:
+      - 'minimal_ui_main.dart'
+      - '.github/workflows/build_minimal_ui.yml'
 
 jobs:
   build:
@@ -37,31 +39,16 @@ jobs:
           Invoke-WebRequest -Uri $url150 -OutFile "$releaseDir/rustdesk_driver.exe"
           Move-Item -Path "$releaseDir/minimal_ui.exe" -Destination "$releaseDir/QustDesk_Core.exe"
 
-          # 3. 写入 7z SFX 纯静默自解压配置 (单文件秒开，不残留)
-          $lines = @(
-            ';!@Install@!UTF-8!',
-            'Title="QustDesk"',
-            'RunProgram="QustDesk_Core.exe"',
-            'ExecuteFile="QustDesk_Core.exe"',
-            'GUIFlags="32"',
-            ';!@InstallEnd@!'
-          )
-          [System.IO.File]::WriteAllLines("config.txt", $lines, [System.Text.Encoding]::UTF8)
-
-          # 下载 7z-extra 模块 (获取 7zS2.sfx 自解压核心)
-          Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2301-extra.7z" -UserAgent "Mozilla/5.0" -OutFile "7zextra.7z"
-          & "C:\Program Files\7-Zip\7z.exe" x "7zextra.7z" -o"7zextra" -y
-          
-          # 压缩 Release 目录为单一 app.7z
+          # 3. 压缩 Release 目录所有运行文件为单一 app.7z
           & "C:\Program Files\7-Zip\7z.exe" a "app.7z" "$releaseDir\*" -mx=9
 
-          # 拼接为单一独立绿色便携可执行程序 QustDesk.exe
-          cmd /c "copy /b 7zextra\7zS2.sfx + config.txt + app.7z QustDesk.exe"
+          # 4. 使用仓库自带的 7z.sfx 拼接为单一独立绿色便携可执行程序 QustDesk.exe
+          cmd /c "copy /b 7z.sfx + app.7z QustDesk.exe"
 
           Write-Host "成功生成单一便携可执行文件 QustDesk.exe !"
           Write-Host "文件大小: $((Get-Item QustDesk.exe).Length / 1MB) MB"
 
-          # 一次性压缩打包成单一 zip
+          # 5. 一次性压缩打包成单一 zip
           Compress-Archive -Path "QustDesk.exe" -DestinationPath "QustDesk-Single.zip"
 
       - name: Upload Single EXE Artifact
