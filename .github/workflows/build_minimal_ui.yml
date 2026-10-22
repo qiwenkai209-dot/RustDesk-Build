@@ -1,11 +1,9 @@
-name: Build Minimal 5-Elements QustDesk
+name: Build Single Standalone EXE
 
 on:
   workflow_dispatch:
   push:
-    paths:
-      - 'minimal_ui_main.dart'
-      - '.github/workflows/build_minimal_ui.yml'
+    branches: [ main ]
 
 jobs:
   build:
@@ -20,9 +18,10 @@ jobs:
           channel: 'stable'
           cache: true
 
-      - name: Build Minimal UI
+      - name: Build Minimal App & Package Single EXE
         shell: pwsh
         run: |
+          # 1. 编译 Flutter 5大要素极简主视窗
           flutter config --enable-windows-desktop
           flutter create --platforms=windows minimal_ui
           Copy-Item -Path "minimal_ui_main.dart" -Destination "minimal_ui/lib/main.dart" -Force
@@ -30,15 +29,48 @@ jobs:
           flutter pub get
           flutter build windows --release
           cd ..
+          
           $releaseDir = "minimal_ui/build/windows/x64/runner/Release"
+          
+          # 2. 下载微软认证 1.5.0 原生驱动核心放入
           $url150 = "https://github.com/rustdesk/rustdesk/releases/download/1.5.0/rustdesk-1.5.0-x86_64.exe"
           Invoke-WebRequest -Uri $url150 -OutFile "$releaseDir/rustdesk_driver.exe"
-          Move-Item -Path "$releaseDir/minimal_ui.exe" -Destination "$releaseDir/QustDesk.exe"
-          Compress-Archive -Path "$releaseDir/*" -DestinationPath "QustDesk-Minimal-5Elements.zip"
-          Write-Host "Done!"
+          Move-Item -Path "$releaseDir/minimal_ui.exe" -Destination "$releaseDir/QustDesk_Core.exe"
 
-      - name: Upload Artifact
+          # 3. 安装 7-Zip
+          choco install 7zip.install -y
+          
+          # 写入 7z SFX 纯静默自解压配置 (单文件秒开，不残留)
+          $lines = @(
+            ';!@Install@!UTF-8!',
+            'Title="QustDesk"',
+            'RunProgram="QustDesk_Core.exe"',
+            'ExecuteFile="QustDesk_Core.exe"',
+            'GUIFlags="32"',
+            ';!@InstallEnd@!'
+          )
+          [System.IO.File]::WriteAllLines("config.txt", $lines, [System.Text.Encoding]::UTF8)
+
+          # 下载 7zS2.sfx
+          Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2408-extra.7z" -OutFile "7zextra.7z"
+          & "C:\Program Files\7-Zip\7z.exe" x "7zextra.7z" -o"7zextra" -y
+          
+          # 压缩 Release 目录
+          & "C:\Program Files\7-Zip\7z.exe" a "app.7z" "$releaseDir\*" -mx=9
+
+          # 拼接为单一纯可执行程序 QustDesk.exe
+          cmd /c "copy /b 7zextra\7zS2.sfx + config.txt + app.7z QustDesk.exe"
+
+          Write-Host "成功生成单一便携可执行文件 QustDesk.exe !"
+          Write-Host "文件大小: $((Get-Item QustDesk.exe).Length / 1MB) MB"
+
+          # 一次性压缩打包成单一 zip
+          Compress-Archive -Path "QustDesk.exe" -DestinationPath "QustDesk-Single.zip"
+
+      - name: Upload Single EXE Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: QustDesk-Minimal-Client
-          path: QustDesk-Minimal-5Elements.zip
+          name: QustDesk-Single-EXE
+          path: |
+            QustDesk.exe
+            QustDesk-Single.zip
