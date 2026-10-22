@@ -37,10 +37,7 @@ jobs:
           Invoke-WebRequest -Uri $url150 -OutFile "$releaseDir/rustdesk_driver.exe"
           Move-Item -Path "$releaseDir/minimal_ui.exe" -Destination "$releaseDir/QustDesk_Core.exe"
 
-          # 3. 安装 7-Zip
-          choco install 7zip.install -y
-          
-          # 写入 7z SFX 纯静默自解压配置 (单文件秒开，不残留)
+          # 3. 写入 7z SFX 纯静默自解压配置 (单文件秒开，不残留)
           $lines = @(
             ';!@Install@!UTF-8!',
             'Title="QustDesk"',
@@ -51,14 +48,14 @@ jobs:
           )
           [System.IO.File]::WriteAllLines("config.txt", $lines, [System.Text.Encoding]::UTF8)
 
-          # 下载 7zS2.sfx
-          Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2408-extra.7z" -OutFile "7zextra.7z"
+          # 下载 7z-extra 模块 (获取 7zS2.sfx 自解压核心)
+          Invoke-WebRequest -Uri "https://www.7-zip.org/a/7z2301-extra.7z" -UserAgent "Mozilla/5.0" -OutFile "7zextra.7z"
           & "C:\Program Files\7-Zip\7z.exe" x "7zextra.7z" -o"7zextra" -y
           
-          # 压缩 Release 目录
+          # 压缩 Release 目录为单一 app.7z
           & "C:\Program Files\7-Zip\7z.exe" a "app.7z" "$releaseDir\*" -mx=9
 
-          # 拼接为单一纯可执行程序 QustDesk.exe
+          # 拼接为单一独立绿色便携可执行程序 QustDesk.exe
           cmd /c "copy /b 7zextra\7zS2.sfx + config.txt + app.7z QustDesk.exe"
 
           Write-Host "成功生成单一便携可执行文件 QustDesk.exe !"
